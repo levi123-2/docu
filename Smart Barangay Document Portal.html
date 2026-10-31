@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Smart Barangay Document Portal</title>
+<link href="https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#eef2f6;--card:#fff;--ink:#16263a;--mute:#5b6b7c;--line:#d5dde6;--blue:#1d4e89;--gold:#e2a62b;--green:#2e7d5b;--red:#b3392f;--onblue:#fff}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1620;--card:#18222f;--ink:#e6edf4;--mute:#9aabbc;--line:#2b3a4b;--blue:#6aa5e8;--gold:#e8b44a;--green:#4cb98a;--red:#e8786e;--onblue:#0f1620}}
+:root[data-theme="dark"]{--bg:#0f1620;--card:#18222f;--ink:#e6edf4;--mute:#9aabbc;--line:#2b3a4b;--blue:#6aa5e8;--gold:#e8b44a;--green:#4cb98a;--red:#e8786e;--onblue:#0f1620}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Public Sans",system-ui,sans-serif}
+h1,h2,h3{font-family:Bitter,Georgia,serif;margin:0 0 .4em;line-height:1.2}
+header{background:var(--blue);color:var(--onblue);border-bottom:4px solid var(--gold);padding:14px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{font-size:1.15rem;margin:0;flex:1;min-width:200px}
+header small{display:block;font:400 .8rem "Public Sans";opacity:.85}
+.seal{width:38px;height:38px;border-radius:50%;background:var(--gold);color:#16263a;display:grid;place-items:center;font:700 1rem Bitter}
+main{max-width:980px;margin:0 auto;padding:20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:20px;margin-bottom:18px}
+label{display:block;font-weight:600;font-size:.9rem;margin:12px 0 4px}
+input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);font:inherit}
+:focus-visible{outline:3px solid var(--gold);outline-offset:1px}
+button{font:600 .95rem "Public Sans";padding:10px 16px;border-radius:4px;border:1px solid var(--blue);background:var(--blue);color:var(--onblue);cursor:pointer}
+button.ghost{background:transparent;color:var(--blue)}
+button.sm{padding:5px 10px;font-size:.82rem}
+.tabs{display:flex;gap:8px;margin-bottom:6px}.tabs button{flex:1}
+.tabs button.off{background:transparent;color:var(--blue)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+@media(max-width:700px){.grid{grid-template-columns:1fr}}
+.msg{color:var(--red);font-size:.9rem;min-height:1.2em;margin-top:8px}
+.req{border-top:1px solid var(--line);padding:16px 0}.req:first-child{border-top:0}
+.top{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline}
+.ref{font-family:ui-monospace,Menlo,monospace;font-size:.85rem;color:var(--mute)}
+.badge{padding:2px 10px;border-radius:12px;font-size:.8rem;font-weight:600;border:1px solid currentColor}
+.s-Submitted,.s-Under{color:var(--blue)}.s-Approved,.s-Ready,.s-Released{color:var(--green)}.s-Rejected{color:var(--red)}
+.track{display:flex;gap:4px;margin:10px 0 4px}.track i{flex:1;height:6px;border-radius:3px;background:var(--line)}.track i.on{background:var(--green)}
+.pickup{background:var(--bg);border-left:4px solid var(--gold);padding:10px 14px;margin-top:10px;border-radius:0 4px 4px 0}
+.pickup b{font:700 1.3rem ui-monospace,Menlo,monospace;letter-spacing:.08em}
+.wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:640px}
+th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:top;font-size:.9rem}
+.bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}.bar>*{width:auto;flex:1;min-width:140px}
+.muted{color:var(--mute);font-size:.9rem}
+</style></head>
+<body>
+<header><div class="seal">B</div><h1>Smart Barangay Document Portal<small>Request, track and claim your barangay documents</small></h1><span id="who"></span> <button class="ghost sm" id="out" hidden style="color:var(--onblue);border-color:var(--onblue)">Log out</button></header>
+<main id="app"></main>
+<script>
+const DOCS=["Certificate of Residency","Barangay Clearance","Certificate of Indigency","Business Permit Clearance","Certificate of Good Moral Character"];
+const FLOW=["Submitted","Under review","Approved","Ready for pickup","Released"];
+let db,me=null,mode="resident",tab="login",flt="All",q="";
+function load(){try{db=JSON.parse(localStorage.getItem("sbd"))}catch(e){}
+ if(!db)db={users:[{email:"staff@barangay.ph",pw:"admin123",name:"Barangay Secretary",role:"staff"}],reqs:[]};}
+function save(){try{localStorage.setItem("sbd",JSON.stringify(db))}catch(e){}}
+const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt=t=>new Date(t).toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"});
+function authView(){
+ const reg=tab==="register"&&mode==="resident";
+ $("#app").innerHTML=`<div class="card" style="max-width:460px;margin:30px auto">
+ <div class="tabs"><button class="${mode=="resident"?"":"off"}" data-m="resident">Resident</button><button class="${mode=="staff"?"":"off"}" data-m="staff">Barangay staff</button></div>
+ <h2>${reg?"Create resident account":mode=="staff"?"Staff log in":"Resident log in"}</h2>
+ <form id="af">${reg?`<label>Full name</label><input name="name" required><label>Home address (street, purok)</label><input name="addr" required>`:""}
+ <label>Email</label><input name="email" type="email" required><label>Password</label><input name="pw" type="password" required minlength="6">
+ <div class="msg" id="msg" role="alert"></div><button style="width:100%;margin-top:6px">${reg?"Create account":"Log in"}</button></form>
+ ${mode=="resident"?`<p class="muted" style="text-align:center"><a href="#" id="sw">${reg?"I already have an account":"New resident? Create an account"}</a></p>`:`<p class="muted">Demo staff login: staff@barangay.ph / admin123</p>`}</div>`;
+ document.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>{mode=b.dataset.m;tab="login";authView()});
+ const sw=$("#sw");if(sw)sw.onclick=e=>{e.preventDefault();tab=reg?"login":"register";authView()};
+ $("#af").onsubmit=e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.target)),m=$("#msg");
+  if(reg){if(db.users.some(u=>u.email==f.email))return m.textContent="That email is already registered. Log in instead.";
+   const u={email:f.email,pw:f.pw,name:f.name,addr:f.addr,role:"resident"};db.users.push(u);save();me=u;}
+  else{const u=db.users.find(u=>u.email==f.email&&u.pw==f.pw&&u.role==mode);if(!u)return m.textContent="Email or password is incorrect.";me=u;}
+  render();};
+}
+function track(r){if(r.status=="Rejected")return"";const i=FLOW.indexOf(r.status);return`<div class="track" aria-hidden="true">${FLOW.map((_,k)=>`<i class="${k<=i?"on":""}"></i>`).join("")}</div>`}
+const sc=s=>"s-"+s.split(" ")[0];
+function residentView(){
+ const mine=db.reqs.filter(r=>r.email==me.email).sort((a,b)=>b.at-a.at);
+ $("#app").innerHTML=`<div class="card"><h2>Request a document</h2><form id="rf"><div class="grid">
+ <div><label>Document</label><select name="doc">${DOCS.map(d=>`<option>${d}</option>`).join("")}</select></div>
+ <div><label>Copies</label><input name="n" type="number" min="1" max="5" value="1"></div></div>
+ <label>Purpose</label><input name="purpose" placeholder="e.g. School enrollment, job application" required>
+ <label>Notes for the barangay (optional)</label><textarea name="note" rows="2"></textarea>
+ <p class="muted">Documents are claimed at the barangay hall. Bring a valid ID and your pickup code.</p>
+ <button>Submit request</button></form></div>
+ <div class="card"><h2>My requests</h2>${mine.length?mine.map(r=>`<div class="req"><div class="top"><b>${esc(r.doc)} × ${r.n}</b><span class="badge ${sc(r.status)}">${r.status}</span></div>
+ <div class="ref">${r.ref} · filed ${fmt(r.at)} · ${esc(r.purpose)}</div>${track(r)}
+ ${r.remarks?`<div class="muted">Barangay note: ${esc(r.remarks)}</div>`:""}
+ ${r.status=="Ready for pickup"?`<div class="pickup">Ready to claim. Pickup code: <b>${r.code}</b></div>`:""}</div>`).join(""):`<p class="muted">No requests yet. Submit your first one above.</p>`}</div>`;
+ $("#rf").onsubmit=e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.target));
+  db.reqs.push({ref:"BRG-"+String(db.reqs.length+1).padStart(4,"0"),email:me.email,name:me.name,addr:me.addr,doc:f.doc,n:+f.n,purpose:f.purpose,note:f.note,status:"Submitted",remarks:"",code:"",at:Date.now()});
+  save();render();};
+}
+function staffView(){
+ let L=db.reqs.filter(r=>(flt=="All"||r.status==flt)&&(!q||(r.name+r.ref+r.doc).toLowerCase().includes(q.toLowerCase()))).sort((a,b)=>b.at-a.at);
+ const cnt=s=>db.reqs.filter(r=>r.status==s).length;
+ $("#app").innerHTML=`<div class="card"><h2>Request queue</h2><p class="muted">${cnt("Submitted")} new · ${cnt("Under review")} under review · ${cnt("Ready for pickup")} ready for pickup</p>
+ <div class="bar"><input id="q" placeholder="Search name, reference or document" value="${esc(q)}"><select id="fl">${["All",...FLOW,"Rejected"].map(s=>`<option ${s==flt?"selected":""}>${s}</option>`).join("")}</select></div>
+ <div class="wrap"><table><thead><tr><th>Reference</th><th>Resident</th><th>Document</th><th>Status</th><th>Action</th></tr></thead><tbody>
+ ${L.length?L.map(r=>`<tr><td class="ref">${r.ref}<br>${fmt(r.at)}</td><td><b>${esc(r.name)}</b><br><span class="muted">${esc(r.addr||"")}</span></td>
+ <td>${esc(r.doc)} × ${r.n}<br><span class="muted">${esc(r.purpose)}${r.note?" — "+esc(r.note):""}</span></td>
+ <td><span class="badge ${sc(r.status)}">${r.status}</span></td>
+ <td><select data-s="${r.ref}">${[...FLOW,"Rejected"].map(s=>`<option ${s==r.status?"selected":""}>${s}</option>`).join("")}</select>
+ <input data-r="${r.ref}" placeholder="Note to resident" value="${esc(r.remarks)}" style="margin-top:6px"></td></tr>`).join(""):`<tr><td colspan="5" class="muted">No requests match. New resident requests will appear here.</td></tr>`}
+ </tbody></table></div></div>`;
+ $("#q").oninput=e=>{q=e.target.value;staffView();const i=$("#q");i.focus();i.setSelectionRange(q.length,q.length)};
+ $("#fl").onchange=e=>{flt=e.target.value;staffView()};
+ document.querySelectorAll("[data-s]").forEach(s=>s.onchange=()=>{const r=db.reqs.find(x=>x.ref==s.dataset.s);r.status=s.value;
+  if(s.value=="Ready for pickup"&&!r.code)r.code=Math.random().toString(36).slice(2,8).toUpperCase();save();staffView()});
+ document.querySelectorAll("[data-r]").forEach(i=>i.onchange=()=>{db.reqs.find(x=>x.ref==i.dataset.r).remarks=i.value;save()});
+}
+function render(){$("#who").textContent=me?me.name:"";$("#out").hidden=!me;if(!me)authView();else if(me.role=="staff")staffView();else residentView();}
+$("#out").onclick=()=>{me=null;tab="login";render()};
+load();render();
+</script></body></html>
